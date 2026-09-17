@@ -1,6 +1,6 @@
 <!doctype html><html lang="tr"><head><meta charset="utf-8"><title>test</title>
 <script>
-window.__errs=[];window.onerror=(m,s,l,c)=>{__errs.push(m+" @"+l+":"+c)};
+window.__errs=[];window.onerror=(m,s,l,c)=>{__errs.push(m+" @"+l+":"+c);const d=document.createElement("pre");d.id="err";d.textContent="ERR "+m+" @"+l+":"+c;document.body.prepend(d)};
 window.addEventListener("unhandledrejection",e=>__errs.push("rej:"+e.reason));
 </script>
 <link rel="stylesheet" href="../style.css"></head>
@@ -20,6 +20,12 @@ window.addEventListener("unhandledrejection",e=>__errs.push("rej:"+e.reason));
     click("btn-help-close");
     // 5 tur oyna: her turda kaydırıcıyı farklı konuma getir
     const stop=new URLSearchParams(location.search).get("stop");
+    if(new URLSearchParams(location.search).get("speed")){
+      document.getElementById("mode-speed").click();
+      for(let i=0;i<4;i++){ const r=$("size-range"); r.value=500+i*60; r.dispatchEvent(new Event("input")); click("btn-lock"); log.push("hız tur "+(i+1)+": "+$("res-score").textContent+" etiket="+$("mode-label").textContent+" next gizli="+$("btn-next").classList.contains("hidden")); await new Promise(r=>setTimeout(r,1600)); }
+      log.push("toplam="+$("total-score").textContent+" tur etiketi="+$("round-label").textContent);
+      document.title="DONE"; const pre=document.createElement("pre");pre.id="out";pre.textContent="ERRORS:\n"+__errs.join("\n")+"\nLOG:\n"+log.join("\n");document.body.prepend(pre); return;
+    }
     for(let i=0;i<5;i++){
       if(i===0&&new URLSearchParams(location.search).get("hint")){click("btn-hint");log.push("ipucu: "+$("ref-hint").textContent+" btn disabled="+$("btn-hint").disabled);}
       const r=$("size-range"); r.value=[500,700,300,650,520][i]; r.dispatchEvent(new Event("input"));

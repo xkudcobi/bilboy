@@ -21,6 +21,8 @@
   const RATIO_MIN = 1.3, RATIO_MAX = 15;
   const SLIDER_MIN = 0.05, SLIDER_MAX = 200; // hedef/referans oranı aralığı (log)
   const EPOCH = "2026-09-18"; // ilk bulmaca günü (#1)
+  const SPEED_SECONDS = 90;     // Hız Turu süresi
+  const SPEED_RESULT_MS = 1400; // Hız Turunda sonucun ekranda kalma süresi
 
   const MODES = {
     gunluk:   { label: "Günlük",   short: "Günlük",   cats: null },
@@ -215,6 +217,21 @@
     }
     return rounds;
   }
+  // Hız Turu: son birkaç turda kullanılmayan rastgele bir çift üret
+  function randomRound(recent) {
+    for (let tries = 0; tries < 200; tries++) {
+      const target = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+      if (recent.includes(target.id)) continue;
+      const refs = SHAPES.filter((r) => {
+        if (r.id === target.id || recent.includes(r.id)) return false;
+        const ratio = target.realM / r.realM;
+        return ratio >= RATIO_MIN && ratio <= RATIO_MAX;
+      });
+      if (!refs.length) continue;
+      return { target, ref: refs[Math.floor(Math.random() * refs.length)] };
+    }
+    return { target: SHAPES[0], ref: SHAPES[1] };
+  }
 
   // ---------- Oyun durumu ----------
   const S = {
@@ -285,6 +302,10 @@
 
   // ---------- Tur kurulumu ----------
   function setupRound() {
+    if (S.kind === "speed" && S.round >= S.rounds.length) {
+      const recent = S.rounds.slice(-4).flatMap((x) => [x.target.id, x.ref.id]);
+      S.rounds.push(randomRound(recent));
+    }
     const r = cur();
     const rb = refBox(r.ref);
     // hedefi nötr bir boyutla başlat (referansla aynı ana boyut)
@@ -295,7 +316,9 @@
     S.anim = null;
     S.drag = null; S.pinch = null; S.pointers.clear();
 
-    el.roundLabel.textContent = `Tur ${S.round + 1} / ${S.rounds.length}`;
+    el.roundLabel.textContent = S.kind === "speed" ? `Tur ${S.round + 1}` : `Tur ${S.round + 1} / ${S.rounds.length}`;
+    el.dots.classList.toggle("hidden", S.kind === "speed");
+    el.btnHint.classList.toggle("hidden", S.review || S.kind === "speed");
     el.refName.textContent = r.ref.name; el.refSub.textContent = r.ref.sub || "";
     el.targetName.textContent = r.target.name; el.targetSub.textContent = r.target.sub || "";
     el.refScaleLabel.textContent = r.ref.horiz ? "Uzunluk ölçekli" : "Yükseklik ölçekli";
@@ -305,7 +328,6 @@
     el.btnLock.disabled = false;
     const hinted = !!S.hints[S.round];
     el.btnHint.disabled = hinted;
-    el.btnHint.classList.toggle("hidden", S.review);
     el.refHint.classList.toggle("hidden", !hinted);
     if (hinted) el.refHint.textContent = `≈ ${formatMeters(r.ref.realM)}`;
     renderDots();
@@ -635,8 +657,35 @@
     renderDots();
     fitScene();
     if (score === 100) confetti(60);
-    if (S.kind !== "practice") saveGame();
+    if (S.kind !== "practice" && S.kind !== "speed") saveGame();
     checkRoundBadges(r.target, score);
+    if (S.kind === "speed") {
+      el.btnNext.classList.add("hidden");
+      clearTimeout(S.speedNext);
+      S.speedNext = setTimeout(() => { if (S.kind === "speed" && S.phase === "result" && !S.speedOver) { S.round++; setupRound(); } }, SPEED_RESULT_MS);
+    } else el.btnNext.classList.remove("hidden");
+  }
+
+  // ---------- Hız Turu zamanlayıcısı ----------
+  function startSpeedTimer() {
+    clearInterval(S.speedTimer);
+    S.speedEnd = Date.now() + SPEED_SECONDS * 1000;
+    S.speedOver = false;
+    const tick = () => {
+      const left = Math.max(0, S.speedEnd - Date.now());
+      const s = Math.ceil(left / 1000);
+      el.modeLabel.textContent = `⏱ ${pad2(Math.floor(s / 60))}:${pad2(s % 60)}`;
+      el.modeLabel.classList.toggle("urgent", s <= 10);
+      if (left <= 0) {
+        clearInterval(S.speedTimer); clearTimeout(S.speedNext);
+        S.speedOver = true;
+        if (S.phase === "play") { S.rounds.pop(); } // yarım kalan tur sayılmaz
+        tone(330, 0.3, "square", 0.04);
+        showFinal();
+      }
+    };
+    tick();
+    S.speedTimer = setInterval(tick, 250);
   }
 
   function showRoundResult(r, guessM, err, score) {
@@ -655,6 +704,7 @@
   }
 
   el.btnNext.addEventListener("click", () => {
+    if (S.kind === "speed") return;
     tone(440, 0.05, "sine", 0.03);
     if (S.round < S.rounds.length - 1) {
       S.round++;
@@ -690,6 +740,7 @@
   function gameTitle() {
     const m = MODES[S.mode].label;
     if (S.kind === "practice") return "Pratik sonucu";
+    if (S.kind === "speed") return `Hız Turu · ${S.scores.length} tur`;
     if (S.kind === "challenge") return `Meydan okuma · ${S.seed}`;
     const n = puzzleNumber(S.date);
     const isToday = S.date === dateKey();
@@ -701,7 +752,14 @@
     el.final.classList.remove("hidden");
     el.finalTitle.textContent = gameTitle();
     el.finalPts.textContent = S.total;
-    el.finalMsg.textContent = message(S.total / (100 * S.rounds.length));
+    el.finalMsg.textContent = S.kind === "speed"
+      ? `${SPEED_SECONDS} saniyede ${S.scores.length} tur, ortalama ${S.scores.length ? Math.round(S.total / S.scores.length) : 0} puan.`
+      : message(S.total / (100 * S.rounds.length));
+    document.querySelector("#final .of").textContent = S.kind === "speed" ? "puan" : `/ ${100 * S.rounds.length}`;
+    $("ladder").parentElement.querySelector(".ladder-title").classList.toggle("hidden", S.kind === "speed");
+    $("ladder").classList.toggle("hidden", S.kind === "speed");
+    el.btnReview.classList.toggle("hidden", S.kind === "speed");
+    el.btnChallenge.classList.toggle("hidden", S.kind === "speed");
     el.finalRounds.innerHTML = "";
     S.rounds.forEach((r, i) => {
       const li = document.createElement("li");
@@ -718,6 +776,11 @@
     } else el.finalCompare.classList.add("hidden");
 
     const earned = finishGame();
+    if (S.kind === "speed") {
+      const st = getStats();
+      if (S.total > (st.speedBest || 0)) { st.speedBest = S.total; setStats(st); el.finalCompare.textContent = "🏁 Yeni Hız Turu rekoru!"; el.finalCompare.classList.remove("hidden"); }
+      else { el.finalCompare.textContent = `Rekorun: ${st.speedBest || 0}`; el.finalCompare.classList.remove("hidden"); }
+    }
     if (earned.length) {
       el.finalBadges.innerHTML = `<span class="k">Yeni rozet</span>` + earned.map((b) =>
         `<span class="badge-chip" title="${b.desc}">${b.icon} ${b.name}</span>`).join("");
@@ -764,6 +827,7 @@
   function shareLink(withScore) {
     const base = location.href.split(/[?#]/)[0];
     const p = new URLSearchParams();
+    if (S.kind === "speed") return base;
     if (S.kind === "practice" || S.kind === "challenge") p.set("c", S.seed);
     else { if (S.mode !== "gunluk") p.set("m", S.mode); p.set("d", S.date); }
     if (withScore) p.set("s", S.total);
@@ -849,7 +913,7 @@
     if (b) list.push(b);
   }
   function checkRoundBadges(target, score) {
-    if (S.kind === "practice") return;
+    if (S.kind === "practice" || S.kind === "speed") return;
     const st = getStats(); const earned = [];
     if (score === 100) { st.perfectRounds++; award(st, "keskin_goz", earned); }
     if (score >= 90 && target.realM >= 100) award(st, "dev_avcisi", earned);
@@ -862,7 +926,7 @@
   // Oyun bittiğinde istatistikleri güncelle; yeni rozetleri döndür
   function finishGame() {
     const earned = [];
-    if (S.kind === "practice") return earned;
+    if (S.kind === "practice" || S.kind === "speed") return earned;
     const st = getStats();
     const gk = gameKey();
     if (st.counted && st.counted[gk]) return earned;
@@ -902,6 +966,7 @@
     const items = [
       ["Oyun", st.played], ["Ortalama", avg], ["En iyi", st.best],
       ["Seri", currentStreak(st)], ["En uzun seri", st.maxStreak], ["100'lük tur", st.perfectRounds],
+      ["Hız rekoru", st.speedBest || 0],
     ];
     el.statGrid.innerHTML = items.map(([k, v]) => `<div><b>${v}</b><span>${k}</span></div>`).join("");
     const max = Math.max(1, ...st.dist);
@@ -963,7 +1028,10 @@
       const g = load(`bilboy:g:${k}:${dateKey()}`);
       const done = g && g.done;
       return `<a href="${p.toString() ? "?" + p : "./"}" class="mode ${k === S.mode && S.kind !== "practice" && S.kind !== "challenge" ? "active" : ""}" data-mode="${k}">${m.label}${done ? `<span class="mode-done">${g.total}</span>` : ""}</a>`;
-    }).join("");
+    }).join("") + `<button type="button" class="mode mode-btn ${S.kind === "practice" ? "active" : ""}" id="mode-practice">∞ Pratik</button>` +
+      `<button type="button" class="mode mode-btn ${S.kind === "speed" ? "active" : ""}" id="mode-speed">⏱ Hız Turu</button>`;
+    $("mode-practice").addEventListener("click", () => startGame({ kind: "practice" }));
+    $("mode-speed").addEventListener("click", () => startGame({ kind: "speed" }));
   }
 
   function startGame(opts) {
@@ -972,12 +1040,14 @@
     S.date = opts.date || dateKey();
     S.opponent = Number.isFinite(opts.opponent) ? opts.opponent : null;
     S.review = false;
-    if (S.kind === "practice") S.seed = randomSeed();
+    clearInterval(S.speedTimer); clearTimeout(S.speedNext);
+    if (S.kind === "practice" || S.kind === "speed") S.seed = randomSeed();
     else if (S.kind === "challenge") S.seed = opts.seed;
     const seedStr = S.kind === "practice" || S.kind === "challenge" ? `c:${S.seed}` : `${S.mode}:${S.date}`;
-    S.rounds = buildRounds(seedStr, MODES[S.mode].cats);
+    S.rounds = S.kind === "speed" ? [] : buildRounds(seedStr, MODES[S.mode].cats);
     S.round = 0; S.scores = []; S.guesses = []; S.hints = []; S.total = 0; S.celebrated = false;
-    el.modeLabel.textContent = S.kind === "practice" ? "Pratik" : S.kind === "challenge" ? "Meydan okuma"
+    el.modeLabel.classList.remove("urgent");
+    el.modeLabel.textContent = S.kind === "practice" ? "Pratik" : S.kind === "speed" ? "Hız Turu" : S.kind === "challenge" ? "Meydan okuma"
       : S.date === dateKey() ? `Bugün · #${puzzleNumber(S.date)}` : `Arşiv · ${S.date}`;
     el.final.classList.add("hidden");
     el.game.classList.remove("hidden");
@@ -988,7 +1058,7 @@
       el.banner.classList.remove("hidden");
     } else el.banner.classList.add("hidden");
 
-    if (S.kind !== "practice") {
+    if (S.kind !== "practice" && S.kind !== "speed") {
       const saved = loadGame();
       if (saved && Array.isArray(saved.scores) && saved.scores.length) {
         S.scores = saved.scores.map((s) => Math.max(0, Math.min(100, Math.round(Number(s) || 0))));
@@ -1001,6 +1071,7 @@
     }
     el.totalScore.textContent = S.total;
     setupRound();
+    if (S.kind === "speed") { toast(`⏱ ${SPEED_SECONDS} saniye — olabildiğince çok tur!`); startSpeedTimer(); }
   }
 
   function openModal(m) { m.classList.remove("hidden"); }

@@ -15,6 +15,10 @@ Günlük görsel boyut tahmin oyunu. Kırmızı hedef nesneyi, boyutu bilinen ma
 - **Arşiv:** geçmiş günlerin bulmacalarını oyna
 - **Meydan okuma:** aynı 5 turu skorunla birlikte arkadaşına link olarak gönder
 - **Pratik modu:** sınırsız rastgele set
+- **Hız Turu:** 90 saniyede olabildiğince çok tur, yerel rekor takibi
+- **İpucu:** referansın gerçek ölçüsünü 15 puan karşılığında gör
+- **Ayarlar:** tema (otomatik/açık/koyu), ses efektleri, titreşim
+- **Görsel kart:** sonucunu PNG olarak paylaş
 - **PWA:** telefona kurulabilir, çevrimdışı çalışır
 - Açık / koyu tema, mobil uyumlu
 

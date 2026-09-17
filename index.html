@@ -9,6 +9,9 @@
   <meta name="theme-color" content="#0f1117" media="(prefers-color-scheme: dark)" />
   <meta property="og:title" content="Bilboy — Günlük Boyut Tahmin Oyunu" />
   <meta property="og:description" content="Gözün ölçeği ne kadar iyi biliyor? Her gün 5 karşılaştırma, 500 puan." />
+  <meta property="og:image" content="https://xkudcobi.github.io/bilboy/icons/og.png" />
+  <meta property="og:type" content="website" />
+  <meta name="twitter:card" content="summary_large_image" />
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="icons/icon-192.png" type="image/png" />
   <link rel="apple-touch-icon" href="icons/icon-192.png" />
@@ -96,7 +99,7 @@
         </div>
       </div>
 
-      <div class="result hidden" id="result">
+      <div class="result hidden" id="result" aria-live="polite">
         <div class="result-grid">
           <div>
             <span class="k">Senin cevabın</span>
@@ -162,6 +165,8 @@
         <li><b>Kilitle.</b> Tahminini gönder, gerçek ölçek açığa çıksın ve tur başına 100 puana kadar kazan.</li>
       </ol>
       <p class="tip"><b>İpucu:</b> Noktalı kılavuzun işaretlediği boyuttan (yükseklik ya da uzunluk) başla, sonra nesneleri orantılı olarak karşılaştır. Sağ üstteki oran göstergesi hedefin referansa göre kaç kat olduğunu söyler.</p>
+      <p class="tip"><b>Modlar:</b> Günlük, Hayvanlar, Yapılar, Araçlar ve Eşyalar her gün yenilenir ve kaydedilir. <b>Pratik</b> sınırsız rastgele set, <b>Hız Turu</b> ise 90 saniyede olabildiğince çok tur demektir.</p>
+      <p class="tip"><b>İpucu:</b> Zorlandığında 💡 düğmesi referansın gerçek ölçüsünü gösterir; karşılığında o turdan 15 puan düşer.</p>
       <p class="tip"><b>Klavye:</b> <kbd>↑</kbd>/<kbd>↓</kbd> boyut (%2, <kbd>Shift</kbd> ile %10) · <kbd>←</kbd>/<kbd>→</kbd> taşı · <kbd>Enter</kbd> kilitle</p>
       <table class="scoring">
         <tr><th>Sapma</th><th>Puan</th></tr>
