@@ -709,6 +709,7 @@
       el.finalRounds.appendChild(li);
     });
     el.shareNote.textContent = "";
+    renderLadder();
     if (S.opponent !== null) {
       const diff = S.total - S.opponent;
       el.finalCompare.textContent = diff > 0 ? `Rakibini ${diff} puanla geçtin! (${S.opponent})`
@@ -726,6 +727,23 @@
     if (S.total >= 450 && !S.celebrated) { S.celebrated = true; confetti(160); }
     startCountdown();
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  // Günün tüm nesnelerini gerçek boyuta göre sıralı SVG şerit olarak göster
+  function renderLadder() {
+    const items = [];
+    const seen = new Set();
+    for (const r of S.rounds) for (const [shape, role] of [[r.ref, "ref"], [r.target, "target"]]) {
+      if (seen.has(shape.id)) continue; seen.add(shape.id);
+      items.push({ shape, role });
+    }
+    items.sort((a, b) => a.shape.realM - b.shape.realM);
+    $("ladder").innerHTML = items.map(({ shape, role }) => {
+      const vb = `${-(shape.offX || 0)} ${-(shape.offY || 0)} ${shape.nW} ${shape.nH}`;
+      return `<div class="ladder-item ${role}" title="${shape.name} ${shape.sub || ""}">
+        <svg viewBox="${vb}" preserveAspectRatio="xMidYMid meet"><path d="${shape.path}" fill-rule="${shape.fillRule || "nonzero"}"/></svg>
+        <b>${shape.name}</b><small>${formatMeters(shape.realM)}</small></div>`;
+    }).join("");
   }
 
   function startCountdown() {
