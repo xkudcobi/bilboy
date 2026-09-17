@@ -32,6 +32,22 @@
     --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   }
 }
+:root[data-theme="dark"] {
+    --bg: #0f1117;
+    --card: #181b23;
+    --text: #eef0f5;
+    --muted: #9aa1ae;
+    --line: #2a2e3a;
+    --ref: #60a5fa;
+    --target: #f87171;
+    --correct: #4ade80;
+    --warn: #fbbf24;
+    --accent: #60a5fa;
+    --accent-text: #0f1117;
+    --grid: #1f2330;
+    --ground: #3a4052;
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+}
 
 * { box-sizing: border-box; }
 html, body { margin: 0; }
@@ -290,3 +306,18 @@ button.ghost:hover { border-color: var(--muted); }
   font-size: 14px; font-weight: 600; z-index: 30; box-shadow: var(--shadow); animation: rise 0.25s ease-out;
   max-width: calc(100vw - 32px);
 }
+
+/* ---- ayarlar ---- */
+.setting { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: 14px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { border: 0; background: transparent; color: var(--text); padding: 7px 12px; font-size: 13px; cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button.on { background: var(--accent); color: var(--accent-text); }
+button.danger { color: var(--target); border-color: color-mix(in srgb, var(--target) 50%, var(--line)); margin-top: 12px; }
+
+/* ---- ipucu ---- */
+.lock-row { display: flex; gap: 8px; }
+.hint-btn { width: auto; flex: 0 0 auto; white-space: nowrap; padding: 12px 14px; }
+.hint-btn .cost { font-size: 11px; color: var(--muted); }
+.hint-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.hint-val { color: var(--ref); font-weight: 700; }

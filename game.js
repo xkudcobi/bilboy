@@ -71,7 +71,10 @@
     stats: $("stats"), btnStats: $("btn-stats"), statGrid: $("stat-grid"), hist: $("hist"), badges: $("badges"),
     archive: $("archive"), btnArchive: $("btn-archive"), archiveTitle: $("archive-title"), archiveList: $("archive-list"),
     confetti: $("confetti"), toast: $("toast"),
+    refHint: $("ref-hint"), btnHint: $("btn-hint"), btnShareImg: $("btn-share-img"),
+    settings: $("settings"), btnSettings: $("btn-settings"), btnReset: $("btn-reset"),
   };
+  const HINT_COST = 15;
 
   // ---------- Yardımcılar ----------
   function cssVar(name) {
@@ -156,6 +159,40 @@
     return scores.map((s) => (s >= 90 ? "🟩" : s >= 60 ? "🟨" : s >= 30 ? "🟧" : "🟥")).join("");
   }
 
+  // ---------- Ayarlar ----------
+  const settings = Object.assign({ theme: "", sound: 1, vibe: 1 }, load("bilboy:settings", {}));
+  function saveSettings() { store("bilboy:settings", settings); }
+  function applyTheme() {
+    if (settings.theme) document.documentElement.dataset.theme = settings.theme;
+    else delete document.documentElement.dataset.theme;
+  }
+  applyTheme();
+
+  // ---------- Ses (WebAudio, dosyasız) ----------
+  let audio = null;
+  function tone(freq, dur = 0.12, type = "sine", gain = 0.08, when = 0) {
+    if (!settings.sound) return;
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      if (audio.state === "suspended") audio.resume();
+      const t0 = audio.currentTime + when;
+      const o = audio.createOscillator(), gn = audio.createGain();
+      o.type = type; o.frequency.value = freq;
+      gn.gain.setValueAtTime(0, t0);
+      gn.gain.linearRampToValueAtTime(gain, t0 + 0.01);
+      gn.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      o.connect(gn); gn.connect(audio.destination);
+      o.start(t0); o.stop(t0 + dur + 0.02);
+    } catch { /* ses yok */ }
+  }
+  function sfxScore(score) {
+    if (score === 100) { [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.18, "triangle", 0.07, i * 0.09)); }
+    else if (score >= 60) { tone(523, 0.12, "triangle"); tone(784, 0.16, "triangle", 0.07, 0.1); }
+    else if (score >= 30) { tone(440, 0.15, "triangle"); }
+    else { tone(196, 0.25, "sawtooth", 0.04); }
+  }
+  function vibrate(pattern) { if (settings.vibe && navigator.vibrate) { try { navigator.vibrate(pattern); } catch { /* yok */ } } }
+
   // ---------- Bulmaca üretimi ----------
   function buildRounds(seedStr, cats) {
     const rnd = mulberry32(hashString(seedStr));
@@ -186,7 +223,7 @@
     rounds: [], round: 0, phase: "play",
     obj: { x: 0, y: GROUND, scale: 1 },
     sceneScale: 1,
-    scores: [], total: 0, guesses: [],
+    scores: [], total: 0, guesses: [], hints: [],
     drag: null, pointers: new Map(), pinch: null,
     paths: new Map(), anim: null, review: false,
   };
@@ -266,6 +303,11 @@
     el.controls.classList.remove("hidden");
     el.result.classList.add("hidden");
     el.btnLock.disabled = false;
+    const hinted = !!S.hints[S.round];
+    el.btnHint.disabled = hinted;
+    el.btnHint.classList.toggle("hidden", S.review);
+    el.refHint.classList.toggle("hidden", !hinted);
+    if (hinted) el.refHint.textContent = `≈ ${formatMeters(r.ref.realM)}`;
     renderDots();
     updateZoomLabel();
     syncSlider();
@@ -534,6 +576,18 @@
   el.sizeDown.addEventListener("click", () => nudge(1 / 1.02));
   el.sizeUp.addEventListener("click", () => nudge(1.02));
 
+  // ipucu: referansın gerçek ölçüsünü göster, turdan puan düş
+  el.btnHint.addEventListener("click", () => {
+    if (S.phase !== "play" || S.hints[S.round]) return;
+    S.hints[S.round] = true;
+    const r = cur();
+    el.refHint.textContent = `≈ ${formatMeters(r.ref.realM)}`;
+    el.refHint.classList.remove("hidden");
+    el.btnHint.disabled = true;
+    tone(660, 0.08, "sine", 0.05);
+    toast(`Referans ${formatMeters(r.ref.realM)} · bu turdan ${HINT_COST} puan düşer`);
+  });
+
   // ---------- Tahta zoom ----------
   function setSceneScale(s) {
     S.sceneScale = Math.max(0.005, Math.min(4, s));
@@ -568,9 +622,11 @@
     const r = cur();
     const guessM = (keyDim(r.target) * S.obj.scale) / pxPerMeter(r.ref);
     const err = Math.abs(guessM - r.target.realM) / r.target.realM;
-    const score = scoreFromError(err);
+    const score = Math.max(0, scoreFromError(err) - (S.hints[S.round] ? HINT_COST : 0));
 
     S.phase = "result";
+    sfxScore(score);
+    vibrate(score === 100 ? [30, 40, 60] : score >= 60 ? 30 : [15, 30, 15]);
     S.anim = { start: performance.now(), dur: 700, from: S.obj.scale };
     S.scores.push(score);
     S.guesses.push(guessM);
@@ -589,6 +645,7 @@
     el.resActual.textContent = formatMeters(r.target.realM);
     el.resError.textContent = err < 0.005 ? "Tam isabet" : `%${Math.round(err * 100)} ${guessM > r.target.realM ? "büyük" : "küçük"}`;
     el.resScore.textContent = score;
+    el.resScore.title = S.hints[S.round] ? `İpucu kullanıldı (−${HINT_COST})` : "";
     el.devMarker.style.left = `${Math.min(1, err / 1.6) * 100}%`;
     el.resFact.innerHTML = r.target.fact || "";
     const last = S.round >= S.rounds.length - 1;
@@ -598,6 +655,7 @@
   }
 
   el.btnNext.addEventListener("click", () => {
+    tone(440, 0.05, "sine", 0.03);
     if (S.round < S.rounds.length - 1) {
       S.round++;
       if (S.review) showReviewRound(); else setupRound();
@@ -708,6 +766,46 @@
     const text = `Bilboy'da ${S.total} puan aldım — aynı 5 turda beni geçebilir misin?\n${shareLink(true)}`;
     shareText(text, "Meydan okuma linki panoya kopyalandı.");
   });
+  el.btnShareImg.addEventListener("click", shareImage);
+  async function shareImage() {
+    const c = document.createElement("canvas"); c.width = 1080; c.height = 1080;
+    const x = c.getContext("2d");
+    const dark = cssVar("--bg") !== "#f4f5f8";
+    const bg = dark ? "#0f1117" : "#f4f5f8", card = dark ? "#181b23" : "#ffffff", text = dark ? "#eef0f5" : "#17181c", muted = dark ? "#9aa1ae" : "#6b7280";
+    const colRef = cssVar("--ref"), colTarget = cssVar("--target"), colOk = cssVar("--correct"), colWarn = cssVar("--warn");
+    x.fillStyle = bg; x.fillRect(0, 0, 1080, 1080);
+    x.fillStyle = card; x.beginPath(); x.roundRect(60, 60, 960, 960, 40); x.fill();
+    x.fillStyle = colRef; x.beginPath(); x.roundRect(110, 110, 64, 64, 18); x.fill();
+    x.fillStyle = colTarget; x.beginPath(); x.roundRect(150, 150, 40, 40, 12); x.fill();
+    x.fillStyle = text; x.font = "800 56px system-ui, sans-serif"; x.textBaseline = "middle";
+    x.fillText("Bilboy", 214, 142);
+    x.fillStyle = muted; x.font = "500 30px system-ui, sans-serif";
+    x.fillText(gameTitle(), 110, 230);
+    x.fillStyle = text; x.font = "900 200px system-ui, sans-serif"; x.textAlign = "center";
+    x.fillText(String(S.total), 540, 400);
+    x.fillStyle = muted; x.font = "600 40px system-ui, sans-serif";
+    x.fillText(`/ ${100 * S.rounds.length}`, 540, 520);
+    x.font = "500 34px system-ui, sans-serif";
+    x.fillText(message(S.total / (100 * S.rounds.length)), 540, 590);
+    x.textAlign = "left";
+    S.rounds.forEach((r, i) => {
+      const y = 660 + i * 62, s = S.scores[i] ?? 0;
+      const col = s >= 90 ? colOk : s >= 60 ? colWarn : colTarget;
+      x.fillStyle = col; x.beginPath(); x.roundRect(120, y - 20, 40, 40, 10); x.fill();
+      x.fillStyle = text; x.font = "600 32px system-ui, sans-serif"; x.fillText(r.target.name, 184, y);
+      x.textAlign = "right"; x.font = "800 34px system-ui, sans-serif"; x.fillText(String(s), 960, y); x.textAlign = "left";
+    });
+    x.fillStyle = muted; x.font = "500 26px system-ui, sans-serif"; x.textAlign = "center";
+    x.fillText(location.host ? `${location.host}${location.pathname}` : "bilboy", 540, 985);
+    const blob = await new Promise((res) => c.toBlob(res, "image/png"));
+    const file = new File([blob], `bilboy-${S.total}.png`, { type: "image/png" });
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], text: `Bilboy ${gameTitle()} — ${S.total} puan` }); return; }
+    } catch { /* paylaşım iptal */ }
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = file.name; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+    el.shareNote.textContent = "Görsel kart indirildi.";
+  }
   el.btnPractice.addEventListener("click", () => startGame({ kind: "practice" }));
   el.btnReview.addEventListener("click", () => {
     S.review = true; S.round = 0;
@@ -718,7 +816,7 @@
   // ---------- Kayıt & istatistik ----------
   function gameKey() { return `bilboy:g:${S.mode}:${S.kind === "challenge" || S.kind === "practice" ? "c-" + S.seed : S.date}`; }
   function saveGame() {
-    store(gameKey(), { scores: S.scores, guesses: S.guesses, total: S.total, done: S.scores.length >= S.rounds.length });
+    store(gameKey(), { scores: S.scores, guesses: S.guesses, hints: S.hints, total: S.total, done: S.scores.length >= S.rounds.length });
   }
   function loadGame() { return load(gameKey()); }
 
@@ -860,7 +958,7 @@
     else if (S.kind === "challenge") S.seed = opts.seed;
     const seedStr = S.kind === "practice" || S.kind === "challenge" ? `c:${S.seed}` : `${S.mode}:${S.date}`;
     S.rounds = buildRounds(seedStr, MODES[S.mode].cats);
-    S.round = 0; S.scores = []; S.guesses = []; S.total = 0; S.celebrated = false;
+    S.round = 0; S.scores = []; S.guesses = []; S.hints = []; S.total = 0; S.celebrated = false;
     el.modeLabel.textContent = S.kind === "practice" ? "Pratik" : S.kind === "challenge" ? "Meydan okuma"
       : S.date === dateKey() ? `Bugün · #${puzzleNumber(S.date)}` : `Arşiv · ${S.date}`;
     el.final.classList.add("hidden");
@@ -877,6 +975,7 @@
       if (saved && Array.isArray(saved.scores) && saved.scores.length) {
         S.scores = saved.scores.map((s) => Math.max(0, Math.min(100, Math.round(Number(s) || 0))));
         S.guesses = Array.isArray(saved.guesses) ? saved.guesses : [];
+        S.hints = Array.isArray(saved.hints) ? saved.hints : [];
         S.total = S.scores.reduce((a, b) => a + b, 0);
         if (S.scores.length >= S.rounds.length) { showFinal(); return; }
         S.round = S.scores.length; // kaldığı turdan devam
@@ -891,6 +990,25 @@
   el.btnHelp.addEventListener("click", () => openModal(el.help));
   el.btnHelpClose.addEventListener("click", () => { closeModal(el.help); store("bilboy:help-seen", 1); });
   el.btnStats.addEventListener("click", () => { renderStats(); openModal(el.stats); });
+  function renderSettings() {
+    document.querySelectorAll("#theme-seg button").forEach((b) => b.classList.toggle("on", b.dataset.theme === settings.theme));
+    document.querySelectorAll("#sound-seg button").forEach((b) => b.classList.toggle("on", Number(b.dataset.sound) === settings.sound));
+    document.querySelectorAll("#vibe-seg button").forEach((b) => b.classList.toggle("on", Number(b.dataset.vibe) === settings.vibe));
+  }
+  el.btnSettings.addEventListener("click", () => { renderSettings(); openModal(el.settings); });
+  el.settings.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-theme],button[data-sound],button[data-vibe]");
+    if (!b) return;
+    if (b.dataset.theme !== undefined) { settings.theme = b.dataset.theme; applyTheme(); draw(); }
+    if (b.dataset.sound !== undefined) { settings.sound = Number(b.dataset.sound); if (settings.sound) tone(660, 0.1); }
+    if (b.dataset.vibe !== undefined) { settings.vibe = Number(b.dataset.vibe); vibrate(20); }
+    saveSettings(); renderSettings();
+  });
+  el.btnReset.addEventListener("click", () => {
+    if (!confirm("Tüm istatistikler, rozetler ve kayıtlı oyunlar silinecek. Emin misin?")) return;
+    try { Object.keys(localStorage).filter((k) => k.startsWith("bilboy:")).forEach((k) => localStorage.removeItem(k)); } catch { /* yoksay */ }
+    location.reload();
+  });
   el.btnArchive.addEventListener("click", () => { renderArchive(); openModal(el.archive); });
   document.querySelectorAll(".modal").forEach((m) => m.addEventListener("click", (e) => {
     if (e.target === m || e.target.closest(".modal-close")) {

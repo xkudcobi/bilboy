@@ -21,6 +21,7 @@ window.addEventListener("unhandledrejection",e=>__errs.push("rej:"+e.reason));
     // 5 tur oyna: her turda kaydırıcıyı farklı konuma getir
     const stop=new URLSearchParams(location.search).get("stop");
     for(let i=0;i<5;i++){
+      if(i===0&&new URLSearchParams(location.search).get("hint")){click("btn-hint");log.push("ipucu: "+$("ref-hint").textContent+" btn disabled="+$("btn-hint").disabled);}
       const r=$("size-range"); r.value=[500,700,300,650,520][i]; r.dispatchEvent(new Event("input"));
       log.push(`tur ${i+1}: ${$("target-name").textContent} vs ${$("ref-name").textContent} oran=${$("ratio").textContent}`);
       click("btn-lock");
@@ -33,6 +34,7 @@ window.addEventListener("unhandledrejection",e=>__errs.push("rej:"+e.reason));
     log.push("final gizli mi: "+$("final").classList.contains("hidden")+" toplam="+$("final-pts").textContent+" başlık="+$("final-title").textContent);
     log.push("rozet: "+$("final-badges").textContent.trim());
     log.push("countdown: "+$("countdown").textContent);
+    click("btn-settings"); document.querySelector("#theme-seg [data-theme=light]").click(); log.push("tema: "+document.documentElement.dataset.theme+" settings="+localStorage.getItem("bilboy:settings")); document.querySelector("[data-close=settings]").click();
     click("btn-stats"); log.push("stats: "+$("stat-grid").textContent.replace(/\s+/g," ")); 
     document.querySelector('[data-close="stats"]').click();
     click("btn-archive"); log.push("archive rows: "+document.querySelectorAll(".archive-row").length+" "+document.querySelector(".archive-row").textContent);

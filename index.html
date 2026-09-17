@@ -28,6 +28,9 @@
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
       </button>
       <button id="btn-help" class="icon-btn" title="Nasıl oynanır?" aria-label="Nasıl oynanır?">?</button>
+      <button id="btn-settings" class="icon-btn" title="Ayarlar" aria-label="Ayarlar">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
     </div>
   </header>
 
@@ -55,6 +58,7 @@
           <span class="tag">Referans</span>
           <strong id="ref-name">—</strong>
           <small id="ref-sub"></small>
+          <small id="ref-hint" class="hint-val hidden"></small>
         </div>
         <div class="name target">
           <span class="tag">Hedef</span>
@@ -86,7 +90,10 @@
           <button id="size-up" class="fine-btn" title="Büyüt (↑)" aria-label="Büyüt">+</button>
         </div>
         <p class="hint">Sürükleyerek taşı · köşelerden, kaydırıcıdan, fare tekerleğiyle ya da iki parmakla boyutlandır · <kbd>Enter</kbd> kilitler</p>
-        <button id="btn-lock" class="primary">Kilitle</button>
+        <div class="lock-row">
+          <button id="btn-hint" class="ghost hint-btn" title="Referansın gerçek ölçüsünü gösterir; bu turdan 15 puan düşer">💡 İpucu <span class="cost">−15</span></button>
+          <button id="btn-lock" class="primary">Kilitle</button>
+        </div>
       </div>
 
       <div class="result hidden" id="result">
@@ -126,6 +133,7 @@
       <div id="final-badges" class="badges-earned hidden"></div>
       <div class="final-actions">
         <button id="btn-share" class="primary">Paylaş</button>
+        <button id="btn-share-img" class="ghost">Görsel kart</button>
         <button id="btn-challenge" class="ghost">Meydan oku</button>
       </div>
       <div class="final-actions">
@@ -184,6 +192,28 @@
       <div class="modal-head"><h2 id="archive-title">Arşiv</h2><button class="icon-btn modal-close" data-close="archive" aria-label="Kapat">×</button></div>
       <p class="note">Geçmiş günlerin bulmacalarını oynayabilirsin. Arşiv skorları seriyi etkilemez.</p>
       <div class="archive-list" id="archive-list"></div>
+    </div>
+  </div>
+
+  <div id="settings" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal-box">
+      <div class="modal-head"><h2>Ayarlar</h2><button class="icon-btn modal-close" data-close="settings" aria-label="Kapat">×</button></div>
+      <div class="setting">
+        <span>Tema</span>
+        <div class="seg" id="theme-seg">
+          <button data-theme="">Otomatik</button><button data-theme="light">Açık</button><button data-theme="dark">Koyu</button>
+        </div>
+      </div>
+      <div class="setting">
+        <span>Ses efektleri</span>
+        <div class="seg" id="sound-seg"><button data-sound="1">Açık</button><button data-sound="0">Kapalı</button></div>
+      </div>
+      <div class="setting">
+        <span>Titreşim (mobil)</span>
+        <div class="seg" id="vibe-seg"><button data-vibe="1">Açık</button><button data-vibe="0">Kapalı</button></div>
+      </div>
+      <p class="note">Veriler yalnızca bu tarayıcıda saklanır.</p>
+      <button id="btn-reset" class="ghost danger">Tüm verileri sıfırla</button>
     </div>
   </div>
 
