@@ -660,10 +660,9 @@
     if (S.kind !== "practice" && S.kind !== "speed") saveGame();
     checkRoundBadges(r.target, score);
     if (S.kind === "speed") {
-      el.btnNext.classList.add("hidden");
       clearTimeout(S.speedNext);
       S.speedNext = setTimeout(() => { if (S.kind === "speed" && S.phase === "result" && !S.speedOver) { S.round++; setupRound(); } }, SPEED_RESULT_MS);
-    } else el.btnNext.classList.remove("hidden");
+    }
   }
 
   // ---------- Hız Turu zamanlayıcısı ----------
@@ -699,6 +698,7 @@
     el.resFact.innerHTML = r.target.fact || "";
     const last = S.round >= S.rounds.length - 1;
     el.btnNext.textContent = S.review ? (last ? "Özete dön" : "Sonraki tur") : (last ? "Sonuçları gör" : "Sonraki tur");
+    el.btnNext.classList.toggle("hidden", S.kind === "speed");
     el.controls.classList.add("hidden");
     el.result.classList.remove("hidden");
   }
