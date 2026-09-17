@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>Boyutla — Günlük Boyut Tahmin Oyunu</title>
+  <meta name="description" content="Kırmızı silüeti mavi referansın yanında gerçek boyutuna getir. Her gün 5 tur, 500 puan." />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"></span>
+      <h1>Boyutla</h1>
+    </div>
+    <div class="top-actions">
+      <button id="btn-help" class="icon-btn" title="Nasıl oynanır?">?</button>
+      <button id="btn-practice" class="icon-btn" title="Pratik modu">∞</button>
+    </div>
+  </header>
+
+  <main>
+    <section id="game" class="card">
+      <div class="hud">
+        <div class="hud-left">
+          <span id="round-label">Tur 1 / 5</span>
+          <span id="mode-label" class="pill">Bugün</span>
+        </div>
+        <div class="hud-right">
+          <span class="score-label">Puan</span>
+          <span id="total-score">0</span>
+        </div>
+      </div>
+
+      <div class="dots" id="round-dots"></div>
+
+      <div class="names">
+        <div class="name ref">
+          <span class="tag">Referans</span>
+          <strong id="ref-name">—</strong>
+          <small id="ref-sub"></small>
+        </div>
+        <div class="name target">
+          <span class="tag">Hedef</span>
+          <strong id="target-name">—</strong>
+          <small id="target-sub"></small>
+        </div>
+      </div>
+
+      <div class="board-wrap">
+        <canvas id="board" width="840" height="510"></canvas>
+        <div class="zoom">
+          <button id="zoom-out" title="Tahtayı uzaklaştır">−</button>
+          <span id="zoom-level">100%</span>
+          <button id="zoom-in" title="Tahtayı yakınlaştır">+</button>
+          <button id="zoom-fit" title="Sığdır">⤢</button>
+        </div>
+      </div>
+
+      <div class="labels">
+        <span id="ref-scale-label">Yükseklik ölçekli</span>
+        <span id="target-scale-label">Yüksekliği ayarla</span>
+      </div>
+
+      <div class="controls" id="controls">
+        <p class="hint">Kırmızı silüeti sürükleyerek taşı, köşelerinden tutarak (veya fare tekerleği / iki parmak) boyutlandır.</p>
+        <button id="btn-lock" class="primary">Kilitle</button>
+      </div>
+
+      <div class="result hidden" id="result">
+        <div class="result-grid">
+          <div>
+            <span class="k">Senin cevabın</span>
+            <strong id="res-guess">—</strong>
+          </div>
+          <div>
+            <span class="k">Gerçek</span>
+            <strong id="res-actual">—</strong>
+          </div>
+          <div>
+            <span class="k">Sapma</span>
+            <strong id="res-error">—</strong>
+          </div>
+          <div class="pts">
+            <span class="k">Puan</span>
+            <strong><span id="res-score">0</span><span class="of">/ 100</span></strong>
+          </div>
+        </div>
+        <p id="res-fact" class="fact"></p>
+        <button id="btn-next" class="primary">Sonraki tur</button>
+      </div>
+    </section>
+
+    <section id="final" class="card hidden">
+      <h2 id="final-title">Bugünkü sonucun</h2>
+      <div class="final-score"><span id="final-pts">0</span><span class="of">/ 500</span></div>
+      <p id="final-msg"></p>
+      <ol id="final-rounds" class="final-rounds"></ol>
+      <div class="final-actions">
+        <button id="btn-share" class="primary">Paylaş</button>
+        <button id="btn-again" class="ghost">Pratik oyna</button>
+      </div>
+      <p id="share-note" class="note"></p>
+    </section>
+
+    <section class="card about">
+      <h2>Boyutla nedir?</h2>
+      <p>Boyutla, günlük bir görsel tahmin oyunudur. Her turda kırmızı hedef nesneyi, boyutu bilinen mavi referansın yanında gerçek ölçeğine getirip tahminini kilitlersin. Ne kadar yakınsan o kadar puan: tur başına 100, günde toplam 500.</p>
+      <p class="note">Bu oyun, Magnitudle'ın <a href="https://magnitudle.com/size-it-up" target="_blank" rel="noopener">Size It Up</a> oyunundan esinlenerek açık kaynak olarak geliştirilmiştir. Tüm silüetler bu proje için çizilmiştir.</p>
+    </section>
+  </main>
+
+  <div id="help" class="modal hidden">
+    <div class="modal-box">
+      <h2>Nasıl oynanır?</h2>
+      <ol class="steps">
+        <li><b>Karşılaştır.</b> Mavi nesne sabit referansındır, boyutu değişmez. Gerçek ölçüsü oyun boyunca gizlidir.</li>
+        <li><b>Taşı ve boyutlandır.</b> Kırmızı silüeti sürükle; köşe tutamaklarından çekerek, fare tekerleğiyle ya da iki parmakla büyüt/küçült. Daha büyük tahminler için tahtayı uzaklaştır.</li>
+        <li><b>Kilitle.</b> Tahminini gönder, gerçek ölçek açığa çıksın ve tur başına 100 puana kadar kazan.</li>
+      </ol>
+      <p class="tip"><b>İpucu:</b> Noktalı kılavuzun işaretlediği boyuttan (yükseklik ya da uzunluk) başla, sonra nesneleri orantılı olarak karşılaştır.</p>
+      <table class="scoring">
+        <tr><th>Sapma</th><th>Puan</th></tr>
+        <tr><td>≤ %6</td><td>100</td></tr>
+        <tr><td>%12</td><td>90</td></tr>
+        <tr><td>%20</td><td>78</td></tr>
+        <tr><td>%32</td><td>62</td></tr>
+        <tr><td>%50</td><td>45</td></tr>
+        <tr><td>%75</td><td>30</td></tr>
+        <tr><td>%110</td><td>18</td></tr>
+        <tr><td>≥ %160</td><td>0</td></tr>
+      </table>
+      <button id="btn-help-close" class="primary">Anladım</button>
+    </div>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

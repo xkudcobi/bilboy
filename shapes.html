@@ -1,0 +1,15 @@
+<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>Boyutla — Silüet Galerisi</title>
+<style>body{font-family:system-ui;background:#f4f5f8;margin:16px}.g{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+.c{background:#fff;border:1px solid #e4e6ec;border-radius:10px;padding:8px;text-align:center;font-size:12px}canvas{width:150px;height:150px;display:block;margin:0 auto}
+.bad{color:#dc2626;font-weight:700}</style></head><body><h2>Silüet Galerisi</h2><div class="g" id="g"></div>
+<script src="data.js"></script><script>
+const g=document.getElementById('g');
+for(const s of SHAPES){const d=document.createElement('div');d.className='c';const c=document.createElement('canvas');c.width=300;c.height=300;const x=c.getContext('2d');
+const f=Math.min(280/s.nW,280/s.nH);x.translate((300-s.nW*f)/2,(300-s.nH*f)/2);x.scale(f,f);x.fillStyle='#1e3a8a';x.fill(new Path2D(s.path),s.fillRule||'nonzero');
+x.strokeStyle='#dc2626';x.lineWidth=1/f;x.strokeRect(0,0,s.nW,s.nH);
+// gerçek sınırları ölç
+const m=document.createElement('canvas');m.width=Math.ceil(s.nW)+4;m.height=Math.ceil(s.nH)+4;const mx=m.getContext('2d');mx.translate(2,2);mx.fill(new Path2D(s.path),s.fillRule||'nonzero');
+const im=mx.getImageData(0,0,m.width,m.height).data;let l=1e9,r=-1,t=1e9,b=-1;for(let y=0;y<m.height;y++)for(let X=0;X<m.width;X++){if(im[(y*m.width+X)*4+3]>0){if(X<l)l=X;if(X>r)r=X;if(y<t)t=y;if(y>b)b=y;}}
+const w=r-l+1,h=b-t+1;const ok=Math.abs(w-s.nW)<=2&&Math.abs(h-s.nH)<=2;
+d.appendChild(c);d.insertAdjacentHTML('beforeend',`<b>${s.name}</b><br>${s.realM} m ${s.horiz?'(uzunluk)':'(yükseklik)'}<br><span class="${ok?'':'bad'}">kutu ${s.nW}×${s.nH} · ölçülen ${w}×${h} (${l-2},${t-2})</span>`);g.appendChild(d);}
+</script></body></html>
