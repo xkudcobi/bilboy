@@ -319,7 +319,7 @@ button.danger { color: var(--target); border-color: color-mix(in srgb, var(--tar
 
 /* ---- ipucu ---- */
 .lock-row { display: flex; gap: 8px; }
-.hint-btn { width: auto; flex: 0 0 auto; white-space: nowrap; padding: 12px 14px; }
+button.hint-btn { width: auto; flex: 0 0 auto; white-space: nowrap; padding: 12px 14px; }
 .hint-btn .cost { font-size: 11px; color: var(--muted); }
 .hint-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 .hint-val { color: var(--ref); font-weight: 700; }
