@@ -31,8 +31,7 @@ const SHAPES = [
   {
     id: "cat", cat: "hayvan", name: "Kedi", sub: "(Evcil, oturur hâlde)", realM: 0.30, horiz: false,
     nW: 100, nH: 140,
-    path: "M18 4 L30 28 L58 28 L70 4 L64 34 Q84 42 74 62 Q94 90 84 140 L12 140 Q2 90 22 62 Q12 42 32 34 Z " +
-          "M84 138 Q104 118 96 88 Q108 124 90 142 Z",
+    path: "M24 44 A26 26 0 1 1 76 44 A26 26 0 1 1 24 44 Z M28 30 L22 2 L46 22 Z M72 30 L78 2 L54 22 Z M30 66 Q10 100 16 140 L84 140 Q90 100 70 66 Z M84 136 Q104 120 96 92 Q106 128 90 142 Z",
     fact: "Evcil bir kedi omuzdan yaklaşık <b>23–25 cm</b>, oturduğunda başın tepesine kadar 30 cm civarındadır."
   },
   {
@@ -98,9 +97,7 @@ const SHAPES = [
   {
     id: "elephant", cat: "hayvan", name: "Afrika Fili", sub: "(Yetişkin erkek, omuz)", realM: 3.2, horiz: false,
     nW: 260, nH: 200,
-    path: "M60 20 Q110 0 170 10 Q230 20 250 60 Q262 90 250 110 L256 120 Q250 150 240 170 L246 198 L226 198 L218 160 L200 156 L196 198 L176 198 L172 150 L120 150 L116 198 L96 198 L92 150 L70 150 L66 198 L46 198 L40 150 Q20 130 24 96 Q6 80 8 60 Q12 34 60 20 Z " +
-          "M232 96 Q244 120 232 150 Q226 170 236 190 L226 194 Q216 170 222 148 Q230 120 226 100 Z " +
-          "M20 60 Q0 70 8 100 Q14 110 24 96 Q12 80 20 60 Z",
+    path: "M40 60 Q60 20 130 22 L190 26 Q230 30 246 60 L256 70 Q262 100 250 120 L250 198 L228 198 L226 150 L206 150 L204 198 L182 198 L180 150 L120 150 L116 198 L94 198 L92 150 L70 150 L66 198 L44 198 L40 150 Q26 140 26 110 Z M244 90 Q262 120 250 160 Q248 190 262 198 L250 200 Q236 190 240 160 Q246 120 232 100 Z M180 40 Q210 60 200 100 Q160 110 150 80 Q150 40 180 40 Z M40 70 L20 110 L26 112 L48 78 Z",
     fact: "Afrika fili omuz yüksekliği <b>3,2 m</b>'ye, ağırlığı 6 tona ulaşan en büyük kara hayvanıdır."
   },
   {
@@ -248,7 +245,7 @@ const SHAPES = [
   {
     id: "mouse", cat: "hayvan", name: "Ev Faresi", sub: "(Gövde, kuyruk hariç)", realM: 0.09, horiz: true,
     nW: 90, nH: 50,
-    path: "M4 34 Q0 20 16 14 Q30 4 50 10 L60 2 L66 12 L80 10 L76 22 L90 36 Q90 48 76 48 L20 48 Q4 48 4 34 Z",
+    path: "M8 30 Q8 8 34 8 Q56 8 66 20 L80 26 Q90 30 82 38 L66 46 Q40 50 16 44 Q6 40 8 30 Z M41 12 A9 9 0 1 1 59 12 A9 9 0 1 1 41 12 Z",
     fact: "Ev faresinin gövdesi <b>7–10 cm</b>, kuyruğu da bir o kadar uzundur; 20 gram ağırlığındadır."
   },
   {
