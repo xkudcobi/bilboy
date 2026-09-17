@@ -1,0 +1,7 @@
+<!doctype html><html><head><meta charset="utf-8"><script>
+// Ekran görüntüsü yardımcısı: yardım penceresini kapatıp oyunu istenen aşamaya getirir
+localStorage.setItem("bilboy:help-seen","1");
+const q=new URLSearchParams(location.search);
+if(q.get("state")==="result"){ /* index içinde otomasyon yok; sadece yardımı kapat */ }
+location.replace("../index.html"+(q.get("q")||""));
+</script></head><body></body></html>

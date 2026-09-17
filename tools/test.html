@@ -1,0 +1,50 @@
+<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>test</title>
+<script>
+window.__errs=[];window.onerror=(m,s,l,c)=>{__errs.push(m+" @"+l+":"+c)};
+window.addEventListener("unhandledrejection",e=>__errs.push("rej:"+e.reason));
+</script>
+<link rel="stylesheet" href="../style.css"></head>
+<body><div id="app"></div>
+<script>
+// index.html gövdesini yükle (script'ler hariç), sonra data.js + game.js çalıştır
+(async()=>{
+  const html=await (await fetch("../index.html")).text();
+  const body=html.slice(html.indexOf("<body>")+6, html.indexOf("</body>")).replace(/<script[\s\S]*?<\/script>/g,"");
+  document.getElementById("app").innerHTML=body;
+  for(const f of ["../data.js","../game.js"]){const s=document.createElement("script");s.src=f;await new Promise((ok,err)=>{s.onload=ok;s.onerror=()=>err(f);document.body.appendChild(s)});}
+  const log=[];const $=id=>document.getElementById(id);
+  const click=id=>$(id).click();
+  try{
+    log.push("mode tabs: "+document.querySelectorAll(".mode").length);
+    log.push("help open: "+!$("help").classList.contains("hidden"));
+    click("btn-help-close");
+    // 5 tur oyna: her turda kaydırıcıyı farklı konuma getir
+    const stop=new URLSearchParams(location.search).get("stop");
+    for(let i=0;i<5;i++){
+      const r=$("size-range"); r.value=[500,700,300,650,520][i]; r.dispatchEvent(new Event("input"));
+      log.push(`tur ${i+1}: ${$("target-name").textContent} vs ${$("ref-name").textContent} oran=${$("ratio").textContent}`);
+      click("btn-lock");
+      log.push(`  -> cevap ${$("res-guess").textContent} gerçek ${$("res-actual").textContent} sapma ${$("res-error").textContent} puan ${$("res-score").textContent}`);
+      await new Promise(r=>setTimeout(r,800));
+      if(stop==="result"){document.title="DONE";return;}
+      click("btn-next");
+    }
+    if(stop==="final"){document.title="DONE";return;}
+    log.push("final gizli mi: "+$("final").classList.contains("hidden")+" toplam="+$("final-pts").textContent+" başlık="+$("final-title").textContent);
+    log.push("rozet: "+$("final-badges").textContent.trim());
+    log.push("countdown: "+$("countdown").textContent);
+    click("btn-stats"); log.push("stats: "+$("stat-grid").textContent.replace(/\s+/g," ")); 
+    document.querySelector('[data-close="stats"]').click();
+    click("btn-archive"); log.push("archive rows: "+document.querySelectorAll(".archive-row").length+" "+document.querySelector(".archive-row").textContent);
+    document.querySelector('[data-close="archive"]').click();
+    click("btn-review"); log.push("review tur1: "+$("res-score").textContent+" btn="+$("btn-next").textContent);
+    // storage
+    log.push("storage keys: "+Object.keys(localStorage).join(","));
+    // yeniden yükleme simülasyonu: aynı sayfada tekrar başlatılamaz; kaydı kontrol et
+    const g=JSON.parse(localStorage.getItem("bilboy:g:gunluk:"+new Date().toISOString().slice(0,10)));
+    log.push("saved done="+(g&&g.done)+" total="+(g&&g.total));
+  }catch(e){log.push("TEST ERR: "+e.stack)}
+  document.title="DONE";
+  const pre=document.createElement("pre");pre.id="out";pre.textContent="ERRORS:\n"+__errs.join("\n")+"\nLOG:\n"+log.join("\n");document.body.prepend(pre);
+})();
+</script></body></html>

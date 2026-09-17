@@ -1,9 +1,11 @@
-/* Boyutla — günlük boyut tahmin oyunu */
+/* Bilboy — günlük boyut tahmin oyunu */
 (() => {
   "use strict";
 
   // ---------- Sabitler ----------
-  const W = 840, H = 510, GROUND = 430;
+  // Tahta boyutu: dar ekranlarda daha kare bir tahta (nesneler daha büyük görünür)
+  const NARROW = window.matchMedia("(max-width: 600px)").matches;
+  const W = NARROW ? 600 : 840, H = NARROW ? 600 : 510, GROUND = NARROW ? 500 : 430;
   const REF_X = 30, REF_MAX_H = 132, REF_MAX_W = 200;
   const ROUNDS = 5;
   const SCORE_TABLE = [
@@ -17,34 +19,80 @@
     { error: 1.60, score: 0 },
   ];
   const RATIO_MIN = 1.3, RATIO_MAX = 15;
+  const SLIDER_MIN = 0.05, SLIDER_MAX = 200; // hedef/referans oranı aralığı (log)
+  const EPOCH = "2026-09-18"; // ilk bulmaca günü (#1)
+
+  const MODES = {
+    gunluk:   { label: "Günlük",   short: "Günlük",   cats: null },
+    hayvanlar:{ label: "Hayvanlar", short: "Hayvan",  cats: ["hayvan"] },
+    yapilar:  { label: "Yapılar",  short: "Yapı",     cats: ["yapi"] },
+    araclar:  { label: "Araçlar",  short: "Araç",     cats: ["arac"] },
+    esyalar:  { label: "Eşyalar",  short: "Eşya",     cats: ["esya"] },
+  };
+
+  const BADGES = [
+    { id: "ilk_oyun",   icon: "🎯", name: "İlk Adım",        desc: "İlk oyununu tamamla" },
+    { id: "keskin_goz", icon: "👁️", name: "Keskin Göz",      desc: "Bir turda 100 puan al" },
+    { id: "yildiz",     icon: "⭐", name: "Yıldız",          desc: "Bir oyunda 450+ puan al" },
+    { id: "tam_isabet", icon: "🏆", name: "Tam İsabet",      desc: "Bir oyunda 500 puan al" },
+    { id: "seri3",      icon: "🔥", name: "3 Gün Seri",      desc: "3 gün üst üste günlük oyna" },
+    { id: "seri7",      icon: "🔥", name: "7 Gün Seri",      desc: "7 gün üst üste günlük oyna" },
+    { id: "seri30",     icon: "💎", name: "30 Gün Seri",     desc: "30 gün üst üste günlük oyna" },
+    { id: "dev_avcisi", icon: "🏔️", name: "Dev Avcısı",      desc: "100 m'den büyük bir hedefte 90+ puan" },
+    { id: "mikro_goz",  icon: "🔬", name: "Mikro Göz",       desc: "10 cm'den küçük bir hedefte 90+ puan" },
+    { id: "gezgin",     icon: "🧭", name: "Gezgin",          desc: "Beş modun hepsinde oyun tamamla" },
+    { id: "meydan",     icon: "⚔️", name: "Düellocu",        desc: "Bir meydan okumayı tamamla" },
+    { id: "geceyarisi", icon: "🦉", name: "Gece Kuşu",       desc: "Gece 00:00–05:00 arasında oyna" },
+  ];
 
   // ---------- DOM ----------
   const $ = (id) => document.getElementById(id);
   const canvas = $("board");
+  canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d");
   const el = {
+    modes: $("modes"), banner: $("challenge-banner"),
     roundLabel: $("round-label"), modeLabel: $("mode-label"), totalScore: $("total-score"),
     dots: $("round-dots"),
     refName: $("ref-name"), refSub: $("ref-sub"), targetName: $("target-name"), targetSub: $("target-sub"),
     refScaleLabel: $("ref-scale-label"), targetScaleLabel: $("target-scale-label"),
+    ratio: $("ratio"),
     controls: $("controls"), btnLock: $("btn-lock"),
+    sizeDown: $("size-down"), sizeUp: $("size-up"), sizeRange: $("size-range"),
     result: $("result"), resGuess: $("res-guess"), resActual: $("res-actual"), resError: $("res-error"),
-    resScore: $("res-score"), resFact: $("res-fact"), btnNext: $("btn-next"),
+    resScore: $("res-score"), resFact: $("res-fact"), btnNext: $("btn-next"), devMarker: $("dev-marker"),
     game: $("game"), final: $("final"), finalTitle: $("final-title"), finalPts: $("final-pts"),
-    finalMsg: $("final-msg"), finalRounds: $("final-rounds"), btnShare: $("btn-share"),
-    btnAgain: $("btn-again"), shareNote: $("share-note"),
+    finalMsg: $("final-msg"), finalCompare: $("final-compare"), finalRounds: $("final-rounds"),
+    finalBadges: $("final-badges"),
+    btnShare: $("btn-share"), btnChallenge: $("btn-challenge"), btnPractice: $("btn-practice"),
+    btnReview: $("btn-review"), countdown: $("countdown"), shareNote: $("share-note"),
     zoomIn: $("zoom-in"), zoomOut: $("zoom-out"), zoomFit: $("zoom-fit"), zoomLevel: $("zoom-level"),
-    help: $("help"), btnHelp: $("btn-help"), btnHelpClose: $("btn-help-close"), btnPractice: $("btn-practice"),
+    help: $("help"), btnHelp: $("btn-help"), btnHelpClose: $("btn-help-close"),
+    stats: $("stats"), btnStats: $("btn-stats"), statGrid: $("stat-grid"), hist: $("hist"), badges: $("badges"),
+    archive: $("archive"), btnArchive: $("btn-archive"), archiveTitle: $("archive-title"), archiveList: $("archive-list"),
+    confetti: $("confetti"), toast: $("toast"),
   };
 
   // ---------- Yardımcılar ----------
   function cssVar(name) {
     return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
   }
-  function todayKey() {
-    const d = new Date();
-    const p = (n) => String(n).padStart(2, "0");
-    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  const pad2 = (n) => String(n).padStart(2, "0");
+  function dateKey(d = new Date()) {
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+  }
+  function parseDate(key) {
+    const [y, m, d] = key.split("-").map(Number);
+    return new Date(y, m - 1, d);
+  }
+  function addDays(key, n) {
+    const d = parseDate(key); d.setDate(d.getDate() + n); return dateKey(d);
+  }
+  function puzzleNumber(key) {
+    return Math.round((parseDate(key) - parseDate(EPOCH)) / 86400000) + 1;
+  }
+  function isValidDate(key) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(key) && dateKey(parseDate(key)) === key;
   }
   function hashString(s) {
     let h = 2166136261;
@@ -67,7 +115,14 @@
     }
     return a;
   }
+  function randomSeed() {
+    const chars = "abcdefghjkmnpqrstuvwxyz23456789";
+    let s = "";
+    for (let i = 0; i < 6; i++) s += chars[Math.floor(Math.random() * chars.length)];
+    return s;
+  }
   const nf = new Intl.NumberFormat("tr-TR", { maximumSignificantDigits: 4 });
+  const nf1 = new Intl.NumberFormat("tr-TR", { maximumFractionDigits: 1 });
   function formatMeters(m) {
     const a = Math.abs(m);
     const u = a >= 1000 ? ["km", 1000] : a >= 1 ? ["m", 1] : a >= 0.01 ? ["cm", 0.01] : ["mm", 0.001];
@@ -86,24 +141,39 @@
     return 0;
   }
   function keyDim(shape) { return shape.horiz ? shape.nW : shape.nH; }
+  const easeOut = (t) => 1 - Math.pow(1 - t, 3);
+  function store(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch { /* yoksay */ } }
+  function load(key, fallback = null) {
+    try { const v = localStorage.getItem(key); return v === null ? fallback : JSON.parse(v); } catch { return fallback; }
+  }
+  function toast(msg, ms = 2200) {
+    el.toast.textContent = msg;
+    el.toast.classList.remove("hidden");
+    clearTimeout(toast.t);
+    toast.t = setTimeout(() => el.toast.classList.add("hidden"), ms);
+  }
+  function squares(scores) {
+    return scores.map((s) => (s >= 90 ? "🟩" : s >= 60 ? "🟨" : s >= 30 ? "🟧" : "🟥")).join("");
+  }
 
   // ---------- Bulmaca üretimi ----------
-  function buildRounds(seedStr) {
+  function buildRounds(seedStr, cats) {
     const rnd = mulberry32(hashString(seedStr));
     const pool = shuffle(SHAPES, rnd);
+    const targets = cats ? pool.filter((s) => cats.includes(s.cat)) : pool;
     const rounds = [];
-    const usedIds = new Set();
-    for (const target of pool) {
+    const used = new Set();
+    for (const target of targets) {
       if (rounds.length >= ROUNDS) break;
-      if (usedIds.has(target.id)) continue;
+      if (used.has(target.id)) continue;
       const refs = pool.filter((r) => {
-        if (r.id === target.id || usedIds.has(r.id)) return false;
+        if (r.id === target.id || used.has(r.id)) return false;
         const ratio = target.realM / r.realM;
         return ratio >= RATIO_MIN && ratio <= RATIO_MAX;
       });
       if (!refs.length) continue;
       const ref = refs[Math.floor(rnd() * refs.length)];
-      usedIds.add(target.id); usedIds.add(ref.id);
+      used.add(target.id); used.add(ref.id);
       rounds.push({ target, ref });
     }
     return rounds;
@@ -111,13 +181,14 @@
 
   // ---------- Oyun durumu ----------
   const S = {
-    mode: "daily", seed: todayKey(),
+    kind: "daily",          // daily | archive | practice | challenge
+    mode: "gunluk", date: dateKey(), seed: "", opponent: null,
     rounds: [], round: 0, phase: "play",
     obj: { x: 0, y: GROUND, scale: 1 },
     sceneScale: 1,
-    scores: [], total: 0,
+    scores: [], total: 0, guesses: [],
     drag: null, pointers: new Map(), pinch: null,
-    paths: new Map(),
+    paths: new Map(), anim: null, review: false,
   };
 
   function path2d(shape) {
@@ -146,8 +217,13 @@
   }
   function cur() { return S.rounds[S.round]; }
   function refFit(ref) { return Math.min(REF_MAX_H / ref.nH, REF_MAX_W / ref.nW); }
-  function pxPerMeter(ref) { return (keyDim(ref) * refFit(ref)) / ref.realM; }
+  function refKeyPx(ref) { return keyDim(ref) * refFit(ref); }
+  function pxPerMeter(ref) { return refKeyPx(ref) / ref.realM; }
   function correctScale(r) { return (r.target.realM * pxPerMeter(r.ref)) / keyDim(r.target); }
+  function ratioToRef() {
+    const r = cur();
+    return (keyDim(r.target) * S.obj.scale) / refKeyPx(r.ref);
+  }
   function refBox(ref) {
     const f = refFit(ref);
     return { left: REF_X, top: GROUND - ref.nH * f, right: REF_X + ref.nW * f, bottom: GROUND, fit: f };
@@ -174,11 +250,12 @@
   function setupRound() {
     const r = cur();
     const rb = refBox(r.ref);
-    // hedefi nötr bir boyutla başlat (ana boyutu ~110 px)
-    const startScale = 110 / keyDim(r.target);
+    // hedefi nötr bir boyutla başlat (referansla aynı ana boyut)
+    const startScale = refKeyPx(r.ref) / keyDim(r.target);
     S.obj = { x: rb.right + 60, y: GROUND, scale: startScale };
     S.sceneScale = 1;
     S.phase = "play";
+    S.anim = null;
     S.drag = null; S.pinch = null; S.pointers.clear();
 
     el.roundLabel.textContent = `Tur ${S.round + 1} / ${S.rounds.length}`;
@@ -191,6 +268,7 @@
     el.btnLock.disabled = false;
     renderDots();
     updateZoomLabel();
+    syncSlider();
     draw();
   }
 
@@ -198,13 +276,25 @@
     el.dots.innerHTML = "";
     for (let i = 0; i < S.rounds.length; i++) {
       const d = document.createElement("span");
-      if (i < S.scores.length) d.classList.add("done");
-      else if (i === S.round) d.classList.add("active");
+      if (i < S.scores.length) {
+        d.classList.add("done");
+        d.style.setProperty("--p", S.scores[i] / 100);
+      } else if (i === S.round) d.classList.add("active");
       el.dots.appendChild(d);
     }
   }
   function updateZoomLabel() {
     el.zoomLevel.textContent = `${Math.round(S.sceneScale * 100)}%`;
+  }
+  function updateRatio() {
+    const q = ratioToRef();
+    el.ratio.textContent = `×${q >= 10 ? nf1.format(Math.round(q)) : nf1.format(q)}`;
+  }
+  function syncSlider() {
+    const q = Math.max(SLIDER_MIN, Math.min(SLIDER_MAX, ratioToRef()));
+    const t = Math.log(q / SLIDER_MIN) / Math.log(SLIDER_MAX / SLIDER_MIN);
+    el.sizeRange.value = Math.round(t * 1000);
+    updateRatio();
   }
 
   // ---------- Çizim ----------
@@ -226,25 +316,31 @@
   }
 
   function drawGuide(box, horiz, color) {
-    // ekran koordinatında noktalı kılavuz
     const a = toScreen(box.left, box.top), b = toScreen(box.right, box.bottom);
     ctx.save();
     ctx.strokeStyle = color; ctx.fillStyle = color;
     ctx.lineWidth = 1.5; ctx.setLineDash([4, 4]); ctx.globalAlpha = 0.9;
     ctx.beginPath();
     if (horiz) {
-      const y = b.y + 12;
+      const y = Math.min(H - 6, b.y + 12);
       ctx.moveTo(a.x, y); ctx.lineTo(b.x, y);
       ctx.moveTo(a.x, y - 5); ctx.lineTo(a.x, y + 5);
       ctx.moveTo(b.x, y - 5); ctx.lineTo(b.x, y + 5);
     } else {
-      const x = b.x + 12;
+      const x = Math.min(W - 6, b.x + 12);
       ctx.moveTo(x, a.y); ctx.lineTo(x, b.y);
       ctx.moveTo(x - 5, a.y); ctx.lineTo(x + 5, a.y);
       ctx.moveTo(x - 5, b.y); ctx.lineTo(x + 5, b.y);
     }
     ctx.stroke();
     ctx.restore();
+  }
+
+  function ghostScale(r) {
+    const cs = correctScale(r);
+    if (!S.anim) return cs;
+    const t = Math.min(1, (performance.now() - S.anim.start) / S.anim.dur);
+    return S.anim.from + (cs - S.anim.from) * easeOut(t);
   }
 
   function draw() {
@@ -269,8 +365,7 @@
     const rb = refBox(r.ref);
     fillShape(r.ref, REF_X, GROUND, rb.fit, colRef);
     if (S.phase === "result") {
-      const cs = correctScale(r);
-      fillShape(r.target, S.obj.x, S.obj.y, cs, colOk, 0.35, colOk);
+      fillShape(r.target, S.obj.x, S.obj.y, ghostScale(r), colOk, 0.35, colOk);
       fillShape(r.target, S.obj.x, S.obj.y, S.obj.scale, colTarget, 0.55);
     } else {
       fillShape(r.target, S.obj.x, S.obj.y, S.obj.scale, colTarget);
@@ -282,11 +377,11 @@
     const ob = objBox(r.target, S.obj);
     drawGuide(ob, r.target.horiz, colTarget);
 
-    // etiketler
+    // etiket
     ctx.save();
     ctx.font = "600 12px system-ui, sans-serif"; ctx.textAlign = "center";
     const rs = toScreen((rb.left + rb.right) / 2, GROUND);
-    ctx.fillStyle = colRef; ctx.fillText("Referans", rs.x, Math.min(H - 8, rs.y + 26));
+    ctx.fillStyle = colRef; ctx.fillText("Referans", rs.x, Math.min(H - 8, rs.y + (r.ref.horiz ? 34 : 22)));
     ctx.restore();
 
     // köşe tutamakları
@@ -298,6 +393,9 @@
       }
       ctx.restore();
     }
+
+    if (S.anim && performance.now() - S.anim.start < S.anim.dur) requestAnimationFrame(draw);
+    else if (S.anim) { S.anim = null; }
   }
 
   function corners(box) {
@@ -310,7 +408,7 @@
   }
 
   // ---------- Etkileşim ----------
-  const MIN_SCALE = 0.005, MAX_SCALE = 5000;
+  const MIN_SCALE = 0.002, MAX_SCALE = 20000;
   function clampScale(s) { return Math.max(MIN_SCALE, Math.min(MAX_SCALE, s)); }
 
   function hitCorner(sx, sy) {
@@ -325,16 +423,17 @@
   }
 
   function setScaleKeepingPoint(newScale, wx, wy) {
-    // (wx,wy) dünya noktası sabit kalacak şekilde ölçekle
-    const t = cur().target;
     const old = S.obj.scale;
     newScale = clampScale(newScale);
     const k = newScale / old;
     S.obj.x = wx - (wx - S.obj.x) * k;
     S.obj.y = wy - (wy - S.obj.y) * k;
     S.obj.scale = newScale;
-    void t;
   }
+  function setScaleAnchoredBottomLeft(newScale) {
+    S.obj.scale = clampScale(newScale);
+  }
+  function changed() { syncSlider(); draw(); }
 
   canvas.addEventListener("pointerdown", (e) => {
     if (S.phase !== "play") return;
@@ -375,7 +474,7 @@
       const [p1, p2] = [...S.pointers.values()];
       const d = Math.hypot(p1.x - p2.x, p1.y - p2.y);
       setScaleKeepingPoint(S.pinch.initScale * (d / S.pinch.initDist), S.pinch.center.x, S.pinch.center.y);
-      draw(); return;
+      changed(); return;
     }
     if (!S.drag) {
       canvas.style.cursor = hitCorner(b.x, b.y) ? "nwse-resize" : hitInside(b.x, b.y) ? "grab" : "default";
@@ -385,6 +484,7 @@
     const p = toWorld(b.x, b.y);
     if (S.drag.type === "move") {
       S.obj.x = p.x - S.drag.dx; S.obj.y = p.y - S.drag.dy;
+      draw();
     } else {
       const d = Math.hypot(p.x - S.drag.anchor.x, p.y - S.drag.anchor.y);
       const ns = clampScale(S.drag.initScale * (d / S.drag.initDist));
@@ -392,8 +492,8 @@
       const w = t.nW * ns, h = t.nH * ns;
       S.obj.x = S.drag.corner.includes("l") ? S.drag.anchor.x - w : S.drag.anchor.x;
       S.obj.y = S.drag.corner.includes("t") ? S.drag.anchor.y : S.drag.anchor.y + h;
+      changed();
     }
-    draw();
   });
 
   function endPointer(e) {
@@ -414,12 +514,29 @@
     const factor = Math.pow(1.0015, -e.deltaY);
     const inside = hitInside(b.x, b.y);
     setScaleKeepingPoint(S.obj.scale * factor, inside ? p.x : cx, inside ? p.y : cy);
-    draw();
+    changed();
   }, { passive: false });
+
+  // kaydırıcı ve ince ayar
+  el.sizeRange.addEventListener("input", () => {
+    if (S.phase !== "play") return;
+    const t = el.sizeRange.value / 1000;
+    const q = SLIDER_MIN * Math.pow(SLIDER_MAX / SLIDER_MIN, t);
+    const r = cur();
+    setScaleAnchoredBottomLeft((q * refKeyPx(r.ref)) / keyDim(r.target));
+    updateRatio(); draw();
+  });
+  function nudge(factor) {
+    if (S.phase !== "play") return;
+    setScaleAnchoredBottomLeft(S.obj.scale * factor);
+    changed();
+  }
+  el.sizeDown.addEventListener("click", () => nudge(1 / 1.02));
+  el.sizeUp.addEventListener("click", () => nudge(1.02));
 
   // ---------- Tahta zoom ----------
   function setSceneScale(s) {
-    S.sceneScale = Math.max(0.01, Math.min(4, s));
+    S.sceneScale = Math.max(0.005, Math.min(4, s));
     updateZoomLabel(); draw();
   }
   el.zoomIn.addEventListener("click", () => setSceneScale(S.sceneScale * 1.25));
@@ -433,12 +550,10 @@
     let left = Math.min(rb.left, ob.left), top = Math.min(rb.top, ob.top);
     let right = Math.max(rb.right, ob.right), bottom = Math.max(rb.bottom, ob.bottom);
     if (S.phase === "result") {
-      const cs = correctScale(r);
-      const cb = objBox(r.target, { x: S.obj.x, y: S.obj.y, scale: cs });
+      const cb = objBox(r.target, { x: S.obj.x, y: S.obj.y, scale: correctScale(r) });
       left = Math.min(left, cb.left); top = Math.min(top, cb.top);
       right = Math.max(right, cb.right); bottom = Math.max(bottom, cb.bottom);
     }
-    // sahne (30,430) etrafında ölçeklenir; içeriği 20px kenar payıyla sığdır
     const sx = (W - REF_X - 40) / Math.max(1, right - REF_X);
     const sy = (GROUND - 40) / Math.max(1, GROUND - top);
     const sLeft = left < REF_X ? (REF_X - 20) / (REF_X - left) : Infinity;
@@ -451,92 +566,317 @@
   function lockIn() {
     if (S.phase !== "play") return;
     const r = cur();
-    const ppm = pxPerMeter(r.ref);
-    const guessPx = keyDim(r.target) * S.obj.scale;
-    const guessM = guessPx / ppm;
+    const guessM = (keyDim(r.target) * S.obj.scale) / pxPerMeter(r.ref);
     const err = Math.abs(guessM - r.target.realM) / r.target.realM;
     const score = scoreFromError(err);
 
     S.phase = "result";
+    S.anim = { start: performance.now(), dur: 700, from: S.obj.scale };
     S.scores.push(score);
+    S.guesses.push(guessM);
     S.total += score;
+    showRoundResult(r, guessM, err, score);
+    renderDots();
+    fitScene();
+    if (score === 100) confetti(60);
+    if (S.kind !== "practice") saveGame();
+    checkRoundBadges(r.target, score);
+  }
+
+  function showRoundResult(r, guessM, err, score) {
     el.totalScore.textContent = S.total;
     el.resGuess.textContent = formatMeters(guessM);
     el.resActual.textContent = formatMeters(r.target.realM);
-    el.resError.textContent = `%${Math.round(err * 100)} ${guessM > r.target.realM ? "büyük" : "küçük"}`;
+    el.resError.textContent = err < 0.005 ? "Tam isabet" : `%${Math.round(err * 100)} ${guessM > r.target.realM ? "büyük" : "küçük"}`;
     el.resScore.textContent = score;
+    el.devMarker.style.left = `${Math.min(1, err / 1.6) * 100}%`;
     el.resFact.innerHTML = r.target.fact || "";
-    el.btnNext.textContent = S.round < S.rounds.length - 1 ? "Sonraki tur" : "Sonuçları gör";
+    const last = S.round >= S.rounds.length - 1;
+    el.btnNext.textContent = S.review ? (last ? "Özete dön" : "Sonraki tur") : (last ? "Sonuçları gör" : "Sonraki tur");
     el.controls.classList.add("hidden");
     el.result.classList.remove("hidden");
-    renderDots();
-    fitScene();
-    if (S.mode === "daily") saveProgress();
   }
 
   el.btnNext.addEventListener("click", () => {
-    if (S.round < S.rounds.length - 1) { S.round++; setupRound(); }
-    else showFinal();
+    if (S.round < S.rounds.length - 1) {
+      S.round++;
+      if (S.review) showReviewRound(); else setupRound();
+    } else showFinal();
   });
+
+  // Tamamlanmış bir turu (inceleme modunda) yeniden göster
+  function showReviewRound() {
+    const r = cur();
+    const guessM = S.guesses[S.round];
+    setupRound();
+    S.phase = "result";
+    if (Number.isFinite(guessM)) {
+      S.obj.scale = (guessM * pxPerMeter(r.ref)) / keyDim(r.target);
+    } else {
+      S.obj.scale = correctScale(r);
+    }
+    const err = Number.isFinite(guessM) ? Math.abs(guessM - r.target.realM) / r.target.realM : 0;
+    showRoundResult(r, Number.isFinite(guessM) ? guessM : r.target.realM, err, S.scores[S.round]);
+    el.totalScore.textContent = S.total;
+    fitScene();
+  }
 
   // ---------- Final ----------
   function message(ratio) {
+    if (ratio >= 0.98) return "Kusursuz! Gözün bir cetvel gibi çalışıyor.";
     if (ratio >= 0.9) return "Mükemmel göz! Ölçek senin için sır değil.";
     if (ratio >= 0.7) return "Çok iyi — çoğu insandan daha keskin bir gözün var.";
     if (ratio >= 0.5) return "Fena değil — ölçek göründüğünden zordur.";
     return "Zorlu bir set. Gözünü ölçeğe alıştırmaya devam et.";
   }
+  function gameTitle() {
+    const m = MODES[S.mode].label;
+    if (S.kind === "practice") return "Pratik sonucu";
+    if (S.kind === "challenge") return `Meydan okuma · ${S.seed}`;
+    const n = puzzleNumber(S.date);
+    const isToday = S.date === dateKey();
+    return `${m} #${n}${isToday ? "" : ` · ${S.date}`}`;
+  }
   function showFinal() {
+    S.review = false;
     el.game.classList.add("hidden");
     el.final.classList.remove("hidden");
-    el.finalTitle.textContent = S.mode === "daily" ? `Bugünkü sonucun (${S.seed})` : "Pratik sonucu";
+    el.finalTitle.textContent = gameTitle();
     el.finalPts.textContent = S.total;
     el.finalMsg.textContent = message(S.total / (100 * S.rounds.length));
     el.finalRounds.innerHTML = "";
     S.rounds.forEach((r, i) => {
       const li = document.createElement("li");
-      li.innerHTML = `${r.target.name}<b>${S.scores[i] ?? 0}</b>`;
+      li.innerHTML = `<span>${r.target.name}</span><b>${S.scores[i] ?? 0}</b>`;
       el.finalRounds.appendChild(li);
     });
     el.shareNote.textContent = "";
-  }
-  function squares() {
-    return S.scores.map((s) => (s >= 90 ? "🟩" : s >= 60 ? "🟨" : s >= 30 ? "🟧" : "🟥")).join("");
-  }
-  el.btnShare.addEventListener("click", async () => {
-    const text = `Boyutla ${S.mode === "daily" ? S.seed : "(pratik)"}\n${squares()} ${S.total}/${100 * S.rounds.length}\n${location.href.split("#")[0]}`;
-    try {
-      if (navigator.share) await navigator.share({ text });
-      else { await navigator.clipboard.writeText(text); el.shareNote.textContent = "Sonuç panoya kopyalandı."; }
-    } catch { el.shareNote.textContent = text; }
-  });
-  el.btnAgain.addEventListener("click", () => startGame("practice"));
+    if (S.opponent !== null) {
+      const diff = S.total - S.opponent;
+      el.finalCompare.textContent = diff > 0 ? `Rakibini ${diff} puanla geçtin! (${S.opponent})`
+        : diff < 0 ? `Rakibin ${-diff} puan önde. (${S.opponent})` : `Berabere! İkiniz de ${S.total} puan.`;
+      el.finalCompare.classList.remove("hidden");
+    } else el.finalCompare.classList.add("hidden");
 
-  // ---------- Kayıt ----------
-  function storageKey() { return `boyutla:${S.seed}`; }
-  function saveProgress() {
-    try {
-      localStorage.setItem(storageKey(), JSON.stringify({ scores: S.scores, total: S.total, round: S.round, phase: S.phase }));
-    } catch { /* yoksay */ }
+    const earned = finishGame();
+    if (earned.length) {
+      el.finalBadges.innerHTML = `<span class="k">Yeni rozet</span>` + earned.map((b) =>
+        `<span class="badge-chip" title="${b.desc}">${b.icon} ${b.name}</span>`).join("");
+      el.finalBadges.classList.remove("hidden");
+    } else el.finalBadges.classList.add("hidden");
+
+    if (S.total >= 450 && !S.celebrated) { S.celebrated = true; confetti(160); }
+    startCountdown();
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
-  function loadProgress() {
-    try { return JSON.parse(localStorage.getItem(storageKey()) || "null"); } catch { return null; }
+
+  function startCountdown() {
+    clearInterval(startCountdown.t);
+    if (S.kind !== "daily") { el.countdown.textContent = ""; return; }
+    const tick = () => {
+      const now = new Date();
+      const next = parseDate(addDays(dateKey(now), 1));
+      const ms = next - now;
+      const h = Math.floor(ms / 3600000), m = Math.floor((ms % 3600000) / 60000), s = Math.floor((ms % 60000) / 1000);
+      el.countdown.textContent = `Yeni bulmaca: ${pad2(h)}:${pad2(m)}:${pad2(s)}`;
+      if (ms < 1000) location.reload();
+    };
+    tick();
+    startCountdown.t = setInterval(tick, 1000);
+  }
+
+  function shareLink(withScore) {
+    const base = location.href.split(/[?#]/)[0];
+    const p = new URLSearchParams();
+    if (S.kind === "practice" || S.kind === "challenge") p.set("c", S.seed);
+    else { if (S.mode !== "gunluk") p.set("m", S.mode); p.set("d", S.date); }
+    if (withScore) p.set("s", S.total);
+    return `${base}?${p.toString()}`;
+  }
+  async function shareText(text, okMsg) {
+    try {
+      if (navigator.share) { await navigator.share({ text }); return; }
+      await navigator.clipboard.writeText(text);
+      el.shareNote.textContent = okMsg;
+    } catch { el.shareNote.textContent = text; }
+  }
+  el.btnShare.addEventListener("click", () => {
+    const text = `Bilboy ${gameTitle()}\n${squares(S.scores)} ${S.total}/${100 * S.rounds.length}\n${shareLink(false)}`;
+    shareText(text, "Sonuç panoya kopyalandı.");
+  });
+  el.btnChallenge.addEventListener("click", () => {
+    const text = `Bilboy'da ${S.total} puan aldım — aynı 5 turda beni geçebilir misin?\n${shareLink(true)}`;
+    shareText(text, "Meydan okuma linki panoya kopyalandı.");
+  });
+  el.btnPractice.addEventListener("click", () => startGame({ kind: "practice" }));
+  el.btnReview.addEventListener("click", () => {
+    S.review = true; S.round = 0;
+    el.final.classList.add("hidden"); el.game.classList.remove("hidden");
+    showReviewRound();
+  });
+
+  // ---------- Kayıt & istatistik ----------
+  function gameKey() { return `bilboy:g:${S.mode}:${S.kind === "challenge" || S.kind === "practice" ? "c-" + S.seed : S.date}`; }
+  function saveGame() {
+    store(gameKey(), { scores: S.scores, guesses: S.guesses, total: S.total, done: S.scores.length >= S.rounds.length });
+  }
+  function loadGame() { return load(gameKey()); }
+
+  const DEFAULT_STATS = { played: 0, sum: 0, best: 0, streak: 0, maxStreak: 0, lastDaily: null, dist: [0, 0, 0, 0, 0, 0], badges: {}, modes: {}, perfectRounds: 0 };
+  function getStats() { return Object.assign({}, DEFAULT_STATS, load("bilboy:stats", {})); }
+  function setStats(st) { store("bilboy:stats", st); }
+
+  function award(st, id, list) {
+    if (st.badges[id]) return;
+    st.badges[id] = dateKey();
+    const b = BADGES.find((x) => x.id === id);
+    if (b) list.push(b);
+  }
+  function checkRoundBadges(target, score) {
+    if (S.kind === "practice") return;
+    const st = getStats(); const earned = [];
+    if (score === 100) { st.perfectRounds++; award(st, "keskin_goz", earned); }
+    if (score >= 90 && target.realM >= 100) award(st, "dev_avcisi", earned);
+    if (score >= 90 && target.realM <= 0.1) award(st, "mikro_goz", earned);
+    const h = new Date().getHours();
+    if (h < 5) award(st, "geceyarisi", earned);
+    setStats(st);
+    earned.forEach((b) => toast(`${b.icon} Rozet: ${b.name}`));
+  }
+  // Oyun bittiğinde istatistikleri güncelle; yeni rozetleri döndür
+  function finishGame() {
+    const earned = [];
+    if (S.kind === "practice") return earned;
+    const st = getStats();
+    const gk = gameKey();
+    if (st.counted && st.counted[gk]) return earned;
+    st.counted = st.counted || {};
+    st.counted[gk] = 1;
+    st.played++; st.sum += S.total; st.best = Math.max(st.best, S.total);
+    st.dist[Math.min(5, Math.floor(S.total / 100))]++;
+    st.modes[S.mode] = (st.modes[S.mode] || 0) + 1;
+    award(st, "ilk_oyun", earned);
+    if (S.total >= 450) award(st, "yildiz", earned);
+    if (S.total === 500) award(st, "tam_isabet", earned);
+    if (S.kind === "challenge") award(st, "meydan", earned);
+    if (Object.keys(MODES).every((m) => st.modes[m])) award(st, "gezgin", earned);
+    if (S.kind === "daily" && S.mode === "gunluk") {
+      const today = dateKey();
+      if (st.lastDaily !== today) {
+        st.streak = st.lastDaily === addDays(today, -1) ? st.streak + 1 : 1;
+        st.lastDaily = today;
+        st.maxStreak = Math.max(st.maxStreak, st.streak);
+      }
+      if (st.streak >= 3) award(st, "seri3", earned);
+      if (st.streak >= 7) award(st, "seri7", earned);
+      if (st.streak >= 30) award(st, "seri30", earned);
+    }
+    setStats(st);
+    return earned;
+  }
+  function currentStreak(st) {
+    const today = dateKey();
+    if (st.lastDaily === today || st.lastDaily === addDays(today, -1)) return st.streak;
+    return 0;
+  }
+
+  function renderStats() {
+    const st = getStats();
+    const avg = st.played ? Math.round(st.sum / st.played) : 0;
+    const items = [
+      ["Oyun", st.played], ["Ortalama", avg], ["En iyi", st.best],
+      ["Seri", currentStreak(st)], ["En uzun seri", st.maxStreak], ["100'lük tur", st.perfectRounds],
+    ];
+    el.statGrid.innerHTML = items.map(([k, v]) => `<div><b>${v}</b><span>${k}</span></div>`).join("");
+    const max = Math.max(1, ...st.dist);
+    const labels = ["0–99", "100–199", "200–299", "300–399", "400–499", "500"];
+    el.hist.innerHTML = st.dist.map((n, i) =>
+      `<div class="hist-row"><span>${labels[i]}</span><div class="hist-bar" style="width:${Math.max(4, (n / max) * 100)}%">${n}</div></div>`).join("");
+    el.badges.innerHTML = BADGES.map((b) => {
+      const got = st.badges[b.id];
+      return `<div class="badge ${got ? "" : "locked"}" title="${b.desc}${got ? " · " + got : ""}"><span class="badge-icon">${b.icon}</span><b>${b.name}</b><small>${b.desc}</small></div>`;
+    }).join("");
+  }
+
+  function renderArchive() {
+    const today = dateKey();
+    el.archiveTitle.textContent = `Arşiv · ${MODES[S.mode].label}`;
+    const rows = [];
+    for (let i = 0; i < 30; i++) {
+      const d = addDays(today, -i);
+      if (d < EPOCH) break;
+      const g = load(`bilboy:g:${S.mode}:${d}`);
+      const p = new URLSearchParams(); if (S.mode !== "gunluk") p.set("m", S.mode); p.set("d", d);
+      const href = `?${p.toString()}`;
+      const status = g && g.done ? `<b>${g.total}</b><span class="sq">${squares(g.scores)}</span>` : g ? `<span class="muted">devam ediyor</span>` : `<span class="muted">oynanmadı</span>`;
+      rows.push(`<a class="archive-row ${g && g.done ? "done" : ""}" href="${href}"><span>#${puzzleNumber(d)} · ${d}${i === 0 ? " (bugün)" : ""}</span>${status}</a>`);
+    }
+    el.archiveList.innerHTML = rows.join("") || `<p class="note">Henüz arşiv yok.</p>`;
+  }
+
+  // ---------- Konfeti ----------
+  function confetti(n) {
+    const c = el.confetti, x = c.getContext("2d");
+    c.width = innerWidth; c.height = innerHeight;
+    c.classList.remove("hidden");
+    const colors = [cssVar("--ref"), cssVar("--target"), cssVar("--correct"), "#f59e0b", "#a855f7"];
+    const ps = Array.from({ length: n }, () => ({
+      x: innerWidth / 2 + (Math.random() - 0.5) * 200, y: innerHeight * 0.35,
+      vx: (Math.random() - 0.5) * 14, vy: -Math.random() * 12 - 4,
+      r: 4 + Math.random() * 5, a: Math.random() * Math.PI, va: (Math.random() - 0.5) * 0.3,
+      col: colors[Math.floor(Math.random() * colors.length)],
+    }));
+    const t0 = performance.now();
+    (function frame() {
+      const t = (performance.now() - t0) / 1000;
+      x.clearRect(0, 0, c.width, c.height);
+      for (const p of ps) {
+        p.vy += 0.35; p.x += p.vx; p.y += p.vy; p.vx *= 0.99; p.a += p.va;
+        x.save(); x.translate(p.x, p.y); x.rotate(p.a); x.fillStyle = p.col;
+        x.globalAlpha = Math.max(0, 1 - t / 2.2);
+        x.fillRect(-p.r / 2, -p.r / 2, p.r, p.r * 0.6); x.restore();
+      }
+      if (t < 2.2) requestAnimationFrame(frame); else { x.clearRect(0, 0, c.width, c.height); c.classList.add("hidden"); }
+    })();
   }
 
   // ---------- Başlat ----------
-  function startGame(mode) {
-    S.mode = mode;
-    S.seed = mode === "daily" ? todayKey() : `practice-${Date.now()}-${Math.random()}`;
-    S.rounds = buildRounds(S.seed);
-    S.round = 0; S.scores = []; S.total = 0;
-    el.modeLabel.textContent = mode === "daily" ? "Bugün" : "Pratik";
+  function renderModes() {
+    el.modes.innerHTML = Object.entries(MODES).map(([k, m]) => {
+      const p = new URLSearchParams(); if (k !== "gunluk") p.set("m", k);
+      const g = load(`bilboy:g:${k}:${dateKey()}`);
+      const done = g && g.done;
+      return `<a href="${p.toString() ? "?" + p : "./"}" class="mode ${k === S.mode && S.kind !== "practice" && S.kind !== "challenge" ? "active" : ""}" data-mode="${k}">${m.label}${done ? `<span class="mode-done">${g.total}</span>` : ""}</a>`;
+    }).join("");
+  }
+
+  function startGame(opts) {
+    S.kind = opts.kind;
+    S.mode = opts.mode || "gunluk";
+    S.date = opts.date || dateKey();
+    S.opponent = Number.isFinite(opts.opponent) ? opts.opponent : null;
+    S.review = false;
+    if (S.kind === "practice") S.seed = randomSeed();
+    else if (S.kind === "challenge") S.seed = opts.seed;
+    const seedStr = S.kind === "practice" || S.kind === "challenge" ? `c:${S.seed}` : `${S.mode}:${S.date}`;
+    S.rounds = buildRounds(seedStr, MODES[S.mode].cats);
+    S.round = 0; S.scores = []; S.guesses = []; S.total = 0; S.celebrated = false;
+    el.modeLabel.textContent = S.kind === "practice" ? "Pratik" : S.kind === "challenge" ? "Meydan okuma"
+      : S.date === dateKey() ? `Bugün · #${puzzleNumber(S.date)}` : `Arşiv · ${S.date}`;
     el.final.classList.add("hidden");
     el.game.classList.remove("hidden");
+    renderModes();
 
-    if (mode === "daily") {
-      const saved = loadProgress();
+    if (S.opponent !== null) {
+      el.banner.innerHTML = `⚔️ <b>Meydan okuma!</b> Rakibin bu turlarda <b>${S.opponent}</b> puan aldı. Geçebilir misin?`;
+      el.banner.classList.remove("hidden");
+    } else el.banner.classList.add("hidden");
+
+    if (S.kind !== "practice") {
+      const saved = loadGame();
       if (saved && Array.isArray(saved.scores) && saved.scores.length) {
         S.scores = saved.scores.map((s) => Math.max(0, Math.min(100, Math.round(Number(s) || 0))));
+        S.guesses = Array.isArray(saved.guesses) ? saved.guesses : [];
         S.total = S.scores.reduce((a, b) => a + b, 0);
         if (S.scores.length >= S.rounds.length) { showFinal(); return; }
         S.round = S.scores.length; // kaldığı turdan devam
@@ -546,22 +886,63 @@
     setupRound();
   }
 
-  el.btnHelp.addEventListener("click", () => el.help.classList.remove("hidden"));
-  el.btnHelpClose.addEventListener("click", () => {
-    el.help.classList.add("hidden");
-    try { localStorage.setItem("boyutla:help-seen", "1"); } catch { /* yoksay */ }
-  });
-  el.help.addEventListener("click", (e) => { if (e.target === el.help) el.btnHelpClose.click(); });
-  el.btnPractice.addEventListener("click", () => startGame("practice"));
+  function openModal(m) { m.classList.remove("hidden"); }
+  function closeModal(m) { m.classList.add("hidden"); }
+  el.btnHelp.addEventListener("click", () => openModal(el.help));
+  el.btnHelpClose.addEventListener("click", () => { closeModal(el.help); store("bilboy:help-seen", 1); });
+  el.btnStats.addEventListener("click", () => { renderStats(); openModal(el.stats); });
+  el.btnArchive.addEventListener("click", () => { renderArchive(); openModal(el.archive); });
+  document.querySelectorAll(".modal").forEach((m) => m.addEventListener("click", (e) => {
+    if (e.target === m || e.target.closest(".modal-close")) {
+      if (m === el.help) el.btnHelpClose.click(); else closeModal(m);
+    }
+  }));
+
   window.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && S.phase === "play" && !el.game.classList.contains("hidden")) lockIn();
-    else if (e.key === "Enter" && S.phase === "result") el.btnNext.click();
+    const openModalEl = document.querySelector(".modal:not(.hidden)");
+    if (openModalEl) {
+      if (e.key === "Escape" || e.key === "Enter") { if (openModalEl === el.help) el.btnHelpClose.click(); else closeModal(openModalEl); }
+      return;
+    }
+    if (e.target.tagName === "INPUT" || e.target.tagName === "BUTTON" && e.key !== "Enter") return;
+    const inGame = !el.game.classList.contains("hidden");
+    const playing = S.phase === "play" && inGame;
+    if (e.key === "Enter") {
+      if (playing) lockIn(); else if (S.phase === "result" && inGame) el.btnNext.click();
+    } else if (playing) {
+      const big = e.shiftKey ? 1.10 : 1.02;
+      if (e.key === "ArrowUp") { e.preventDefault(); nudge(big); }
+      else if (e.key === "ArrowDown") { e.preventDefault(); nudge(1 / big); }
+      else if (e.key === "ArrowLeft") { e.preventDefault(); S.obj.x -= (e.shiftKey ? 40 : 10) / S.sceneScale; draw(); }
+      else if (e.key === "ArrowRight") { e.preventDefault(); S.obj.x += (e.shiftKey ? 40 : 10) / S.sceneScale; draw(); }
+      else if (e.key === "+" || e.key === "=") setSceneScale(S.sceneScale * 1.25);
+      else if (e.key === "-") setSceneScale(S.sceneScale / 1.25);
+      else if (e.key.toLowerCase() === "f") fitScene();
+    }
   });
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
 
+  // URL parametreleri
+  const params = new URLSearchParams(location.search);
+  const qMode = params.get("m");
+  const qDate = params.get("d");
+  const qSeed = params.get("c");
+  const qScore = params.get("s");
+  const opponent = qScore !== null && Number.isFinite(Number(qScore)) ? Math.max(0, Math.min(500, Math.round(Number(qScore)))) : undefined;
+
   SHAPES.forEach(measureBounds);
-  let helpSeen = false;
-  try { helpSeen = !!localStorage.getItem("boyutla:help-seen"); } catch { /* yoksay */ }
-  if (helpSeen) el.help.classList.add("hidden");
-  startGame("daily");
+  if (!load("bilboy:help-seen")) openModal(el.help);
+
+  if (qSeed && /^[a-z0-9]{4,12}$/.test(qSeed)) {
+    startGame({ kind: "challenge", seed: qSeed, opponent });
+  } else {
+    const mode = qMode && MODES[qMode] ? qMode : "gunluk";
+    const today = dateKey();
+    if (qDate && isValidDate(qDate) && qDate < today && qDate >= EPOCH) startGame({ kind: "archive", mode, date: qDate, opponent });
+    else startGame({ kind: "daily", mode, date: today, opponent });
+  }
+
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+    navigator.serviceWorker.register("sw.js").catch(() => {});
+  }
 })();
